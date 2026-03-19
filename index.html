@@ -22,25 +22,52 @@
   </div>
 
   <div style="margin-top:40px;">
-  <h2>🤖 AI Chat</h2>
+    <h2>🤖 AI Chat</h2>
 
-  <input id="question" placeholder="พิมพ์ถาม..." 
-    style="padding:10px; width:200px; border-radius:10px; border:none;"/>
+    <input
+      id="question"
+      placeholder="พิมพ์ถาม..."
+      style="padding:10px; width:260px; border-radius:10px; border:none;"
+    />
 
-  <button onclick="askAI()" 
-    style="padding:10px; border-radius:10px; margin-left:10px;">
-    ถาม
-  </button>
+    <button
+      onclick="askAI()"
+      style="padding:10px; border-radius:10px; margin-left:10px;"
+    >
+      ถาม
+    </button>
 
-  <p id="answer" style="margin-top:20px;"></p>
-</div>
+    <p id="answer" style="margin-top:20px;"></p>
+  </div>
 
-<script>
-function askAI() {
-  const q = document.getElementById("question").value;
-  document.getElementById("answer").innerText = "AI กำลังตอบ: " + q;
-}
-</script>
+  <script>
+    async function askAI() {
+      const q = document.getElementById("question").value;
+      const answerBox = document.getElementById("answer");
+
+      if (!q) {
+        answerBox.innerText = "กรุณาพิมพ์คำถาม";
+        return;
+      }
+
+      answerBox.innerText = "กำลังคิด...";
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ question: q })
+        });
+
+        const data = await res.json();
+        answerBox.innerText = data.answer || "ไม่มีคำตอบ";
+      } catch (error) {
+        answerBox.innerText = "เชื่อมต่อ AI ไม่สำเร็จ";
+      }
+    }
+  </script>
 
   <div style="margin-top:40px;">
     <h2>🛒 Marketplace</h2>
