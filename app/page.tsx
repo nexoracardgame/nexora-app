@@ -34,11 +34,11 @@ const FRIENDS = [
 
 const SIDEBAR_MENU = [
   { icon: "⌂", label: "Home", href: "/" },
-  { icon: "◫", label: "Category", href: "/category" },
-  { icon: "☰", label: "Library", href: "/library" },
+  { icon: "◫", label: "Nex Wallet", href: "/wallet" },
+  { icon: "☰", label: "Marketplace", href: "/marketplace" },
   { icon: "#", label: "Community", href: "/community", badge: "2" },
-  { icon: "◉", label: "Friends", href: "/friends" },
-  { icon: "♡", label: "Wishlist", href: "/wishlist" },
+  { icon: "◉", label: "Friends", href: "/dm" },
+  { icon: "♡", label: "Rewards", href: "/rewards" },
   { icon: "↓", label: "Downloads", href: "/downloads" },
 ];
 
@@ -692,134 +692,131 @@ export default function Home() {
               </section>
 
               {/* PLAYER ROOMS */}
-              <section>
-                <div
-                  style={{
-                    color: "#9e8b67",
-                    fontSize: 14,
-                    marginBottom: 12,
-                  }}
-                >
-                  ห้องออนไลน์ในระบบ คุณเข้าห้องได้ทันที
-                </div>
-
-                <div
-                  style={{
-                    fontFamily: '"Cinzel", "Noto Sans Thai", serif',
-                    fontSize: 28,
-                    fontWeight: 800,
-                    lineHeight: 1,
-                    marginBottom: 18,
-                    background:
-                      "linear-gradient(180deg, #fff8dd 0%, #f7d978 35%, #dca347 70%, #7d4b16 100%)",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                  }}
-                >
-                  ห้องแชทผู้เล่น
-                </div>
-
-                <div
+<section
   style={{
-    display: "grid",
-    gap: 14,
-    maxWidth: 300,   // 👈 ลดความกว้างตรงนี้
+    minWidth: 0,
   }}
 >
-                  {ROOMS.map((room) => {
-                    const count = counts[room.slug] || 0;
-                    return (
-                      <Link
-                        key={room.slug}
-                        href={`/chat/${room.slug}`}
-                        style={{
-                          borderRadius: 22,
-                          padding: 18,
-                          background: "rgba(255,255,255,0.02)",
-                          border: "1px solid rgba(255,255,255,0.03)",
-                          display: "grid",
-                          gridTemplateColumns: "minmax(0, 1fr) auto",
-                          gap: 12,
-                          alignItems: "center",
-                        }}
-                      >
-                        <div>
-                          <div
-                            style={{
-                              fontWeight: 800,
-                              fontSize: 22,
-                              color: "#f6f1e7",
-                              marginBottom: 6,
-                            }}
-                          >
-                            {room.name}
-                          </div>
-                          <div
-                            style={{
-                              color: "#9f8a62",
-                              fontSize: 13,
-                            }}
-                          >
-                            {room.desc}
-                          </div>
-                        </div>
+  <div
+    style={{
+      borderRadius: 28,
+      padding: 24,
+      background:
+        "linear-gradient(180deg, rgba(255,255,255,0.045), rgba(7,9,15,0.96))",
+      border: "1px solid rgba(255,255,255,0.05)",
+      boxShadow: "0 20px 48px rgba(0, 0, 0, 0.26)",
+    }}
+  >
+    <div
+      style={{
+        fontFamily: '"Cinzel", "Noto Sans Thai", serif',
+        fontSize: 20,
+        fontWeight: 800,
+        color: "#fff3d1",
+        marginBottom: 4,
+      }}
+    >
+      ห้องแชทผู้เล่น
+    </div>
 
-                        <div
-                          style={{
-                            display: "grid",
-                            justifyItems: "end",
-                            gap: 10,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 8,
-                              minHeight: 30,
-                              padding: "0 10px",
-                              borderRadius: 999,
-                              background: "rgba(255,255,255,0.05)",
-                              color: "#f3d27a",
-                              fontSize: 13,
-                              fontWeight: 700,
-                            }}
-                          >
-                            <span
-                              style={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: 999,
-                                background:
-                                  count > 0 ? "#f7d978" : "rgba(255,255,255,0.24)",
-                                boxShadow: count > 0 ? "0 0 10px rgba(247,217,120,0.54)" : "none",
-                              }}
-                            />
-                            {count} คน
-                          </div>
+    <div
+      style={{
+        color: "#9f8a62",
+        fontSize: 13,
+        marginBottom: 18,
+      }}
+    >
+      เข้าได้ทันทีจากหน้านี้
+    </div>
 
-                          <div
-                            style={{
-                              minHeight: 36,
-                              padding: "0 14px",
-                              borderRadius: 14,
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              background:
-                                "linear-gradient(135deg, #fff0b4 0%, #e6bb57 35%, #c88d27 65%, #7c4dff 135%)",
-                              color: "#17130a",
-                              fontWeight: 900,
-                            }}
-                          >
-                            เข้าห้อง
-                          </div>
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </section>
+    <div
+      style={{
+        display: "grid",
+        gap: 16,
+      }}
+    >
+      {ROOMS.map((room) => {
+        const count = counts[room.slug] || 0;
+
+        return (
+          <Link
+            key={room.slug}
+            href={`/chat/${room.slug}`}
+            style={{
+              borderRadius: 22,
+              padding: 18,
+              background:
+                "linear-gradient(135deg, rgba(255,229,142,0.12), rgba(200,141,39,0.08))",
+              border: "1px solid rgba(255,255,255,0.05)",
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) auto",
+              gap: 12,
+              alignItems: "center",
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontWeight: 800,
+                  color: "#fff",
+                  fontSize: 18,
+                  lineHeight: 1.2,
+                  marginBottom: 4,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {room.name}
+              </div>
+
+              <div
+                style={{
+                  color: "#b89e71",
+                  fontSize: 13,
+                  marginBottom: 12,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {room.desc}
+              </div>
+
+              <div
+                style={{
+                  color: "#f1d997",
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {count > 0 ? `${count} ออนไลน์` : "0 ออนไลน์"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                minHeight: 44,
+                padding: "0 18px",
+                borderRadius: 16,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background:
+                  "linear-gradient(135deg, #fff0b4 0%, #e6bb57 35%, #c88d27 65%, #d998b3 100%)",
+                color: "#17130a",
+                fontWeight: 900,
+                whiteSpace: "nowrap",
+              }}
+            >
+              เข้าห้อง
+            </div>
+          </Link>
+        );
+      })}
+    </div>
+  </div>
+</section>
             </div>
           </main>
 

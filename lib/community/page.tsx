@@ -27,8 +27,6 @@ export default function CommunityPage() {
   const [input, setInput] = useState("");
 
   useEffect(() => {
-    const savedUser = localStorage.getItem("nexora_user");
-    if (savedUser) setUser(savedUser);
   }, []);
 
   const filteredMessages = useMemo(() => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import PostCard from './PostCard'
 
@@ -25,18 +25,13 @@ type Props = {
   user?: any
 }
 
-export default function Feed({
-  currentUserId,
-  refreshKey = 0,
-  user,
-}: Props) {
-  const supabase = useMemo(() => createClient(), [])
+export default function Feed({ currentUserId, refreshKey = 0, user }: Props) {
+  const supabase = createClient()
   const [posts, setPosts] = useState<FeedPost[]>([])
   const [loading, setLoading] = useState(true)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const loadPosts = async () => {
-    setLoading(true)
-
+  const fetchPosts = async () => {
     const { data, error } = await supabase
       .from('posts')
       .select(`
@@ -60,128 +55,287 @@ export default function Feed({
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('loadPosts error:', error)
-      setPosts([])
+      console.error('fetchPosts error:', error)
+      return null
+    }
+
+    return (data || []) as FeedPost[]
+  }
+
+  const loadPosts = async () => {
+    setLoading(true)
+    const nextPosts = await fetchPosts()
+
+    if (nextPosts) {
+      setPosts(nextPosts)
     } else {
-      setPosts((data || []) as FeedPost[])
+      setPosts([])
     }
 
     setLoading(false)
   }
 
+  const silentRefreshPosts = async () => {
+    const nextPosts = await fetchPosts()
+    if (!nextPosts) return
+
+    setPosts((prev) => {
+      const prevJson = JSON.stringify(prev)
+      const nextJson = JSON.stringify(nextPosts)
+      if (prevJson === nextJson) return prev
+      return nextPosts
+    })
+  }
+
+  const fetchFullPost = async (postId: string) => {
+    const { data, error } = await supabase
+      .from('posts')
+      .select(`
+        id,
+        content,
+        created_at,
+        user_id,
+        user_name,
+        post_images (
+          id,
+          image_url,
+          sort_order
+        ),
+        post_likes (
+          user_id
+        ),
+        comments (
+          id
+        )
+      `)
+      .eq('id', postId)
+      .single()
+
+    if (error || !data) {
+      console.error('fetchFullPost error:', error)
+      return null
+    }
+
+    return data as FeedPost
+  }
+
   useEffect(() => {
     loadPosts()
+
+    const handleNewPost = (event: Event) => {
+      const customEvent = event as CustomEvent<FeedPost>
+      const newPost = customEvent.detail
+      if (!newPost?.id) return
+
+      setPosts((prev) => {
+        const exists = prev.some((p) => p.id === newPost.id)
+        if (exists) {
+          return prev.map((p) => (p.id === newPost.id ? newPost : p))
+        }
+        return [newPost, ...prev]
+      })
+    }
+
+    const channel = supabase
+      .channel('social-feed-realtime')
+
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'posts',
+        },
+        async (payload) => {
+          const postId = payload.new.id as string
+          if (!postId) return
+
+          const fullPost = await fetchFullPost(postId)
+          if (!fullPost) return
+
+          setPosts((prev) => {
+            const exists = prev.some((p) => p.id === fullPost.id)
+            if (exists) {
+              return prev.map((p) => (p.id === fullPost.id ? fullPost : p))
+            }
+            return [fullPost, ...prev]
+          })
+        }
+      )
+
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'post_images',
+        },
+        async (payload) => {
+          const postId = payload.new.post_id as string
+          if (!postId) return
+
+          const fullPost = await fetchFullPost(postId)
+          if (!fullPost) return
+
+          setPosts((prev) => {
+            const exists = prev.some((p) => p.id === fullPost.id)
+            if (!exists) return [fullPost, ...prev]
+            return prev.map((p) => (p.id === fullPost.id ? fullPost : p))
+          })
+        }
+      )
+
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'post_likes',
+        },
+        (payload) => {
+          const postId = payload.new.post_id as string
+          const likerId = payload.new.user_id as string
+
+          setPosts((prev) =>
+            prev.map((p) =>
+              p.id === postId
+                ? {
+                    ...p,
+                    post_likes: p.post_likes.some((x) => x.user_id === likerId)
+                      ? p.post_likes
+                      : [...p.post_likes, { user_id: likerId }],
+                  }
+                : p
+            )
+          )
+        }
+      )
+
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'post_likes',
+        },
+        (payload) => {
+          const postId = payload.old.post_id as string
+          const likerId = payload.old.user_id as string
+
+          setPosts((prev) =>
+            prev.map((p) =>
+              p.id === postId
+                ? {
+                    ...p,
+                    post_likes: p.post_likes.filter((x) => x.user_id !== likerId),
+                  }
+                : p
+            )
+          )
+        }
+      )
+
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'comments',
+        },
+        (payload) => {
+          const postId = payload.new.post_id as string
+          const commentId = payload.new.id as string
+
+          setPosts((prev) =>
+            prev.map((p) =>
+              p.id === postId
+                ? {
+                    ...p,
+                    comments: p.comments.some((c) => c.id === commentId)
+                      ? p.comments
+                      : [...p.comments, { id: commentId }],
+                  }
+                : p
+            )
+          )
+        }
+      )
+
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'comments',
+        },
+        (payload) => {
+          const postId = payload.old.post_id as string
+          const commentId = payload.old.id as string
+
+          setPosts((prev) =>
+            prev.map((p) =>
+              p.id === postId
+                ? {
+                    ...p,
+                    comments: p.comments.filter((c) => c.id !== commentId),
+                  }
+                : p
+            )
+          )
+        }
+      )
+
+      .subscribe((status) => {
+        console.log('social-feed-realtime:', status)
+      })
+
+    // กันพลาด: โหลดใหม่ทุก 3 วิ
+    pollingRef.current = setInterval(() => {
+      silentRefreshPosts()
+    }, 3000)
+
+    window.addEventListener('new-post', handleNewPost as EventListener)
+
+    return () => {
+      window.removeEventListener('new-post', handleNewPost as EventListener)
+      if (pollingRef.current) clearInterval(pollingRef.current)
+      supabase.removeChannel(channel)
+    }
   }, [refreshKey])
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <FeedTopBar countText="กำลังโหลดโพสต์..." />
-        <FeedSkeleton />
-        <FeedSkeleton />
-        <FeedSkeleton />
+      <div className="rounded-[28px] border border-white/10 bg-white/[0.03] px-5 py-10 text-center text-white/45">
+        กำลังโหลดโพสต์...
+      </div>
+    )
+  }
+
+  if (posts.length === 0) {
+    return (
+      <div className="rounded-[28px] border border-dashed border-white/10 bg-white/[0.03] px-5 py-10 text-center text-white/45">
+        ยังไม่มีโพสต์ในระบบ
       </div>
     )
   }
 
   return (
-    <div className="space-y-5">
-      <FeedTopBar countText={`${posts.length} โพสต์ในฟีด`} />
-
-      {posts.length === 0 ? (
-        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-8 text-center shadow-[0_20px_60px_rgba(0,0,0,0.28)]">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-[#ffb15c] to-[#7c4dff] text-2xl font-extrabold text-white">
-            N
-          </div>
-
-          <h3 className="text-xl font-extrabold text-white">
-            ยังไม่มีโพสต์ในระบบ
-          </h3>
-
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-7 text-white/60">
-            เริ่มโพสต์แรกของคอมมูนิตี้ NEXORA ได้เลย ระบบฟีดนี้พร้อมแสดงโพสต์
-            รูปภาพ คอมเมนต์ และกิจกรรมของผู้เล่นทั้งหมด
-          </p>
-        </div>
-      ) : (
-        posts.map((post, index) => (
-          <div
-            key={post.id}
-            className="group relative overflow-hidden rounded-[28px]"
-          >
-            <div className="pointer-events-none absolute inset-0 rounded-[28px] bg-gradient-to-br from-[#f0c66a]/8 via-transparent to-[#7c4dff]/8 opacity-70" />
-            <div className="relative">
-              <PostCard
-                post={post}
-                currentUserId={currentUserId}
-                onRefresh={loadPosts}
-                user={user}
-              />
+    <div className="space-y-6">
+      {posts.map((post, index) => (
+        <div key={post.id}>
+          {index === 0 && (
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#f0c66a]/20 bg-[#f0c66a]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#f6d98d]">
+              <span>Latest Drop</span>
             </div>
+          )}
 
-            {index === 0 && (
-              <div className="pointer-events-none absolute right-4 top-4 rounded-full border border-[#f0c66a]/20 bg-[#f0c66a]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#f6d98d]">
-                Latest
-              </div>
-            )}
-          </div>
-        ))
-      )}
-    </div>
-  )
-}
-
-function FeedTopBar({ countText }: { countText: string }) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
-      <div>
-        <div className="text-xs font-bold uppercase tracking-[0.22em] text-[#f0c66a]">
-          NEXORA SOCIAL FEED
+          <PostCard
+            post={post}
+            currentUserId={currentUserId}
+            user={user}
+          />
         </div>
-        <div className="mt-1 text-sm text-white/60">{countText}</div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full border border-[#f0c66a]/20 bg-[#f0c66a]/10 px-3 py-1 text-xs font-bold text-[#f6d98d]">
-          โพสต์ล่าสุด
-        </span>
-        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/70">
-          รูปภาพ
-        </span>
-        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/70">
-          คอมเมนต์
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function FeedSkeleton() {
-  return (
-    <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(7,9,15,0.96))] shadow-[0_20px_60px_rgba(0,0,0,0.28)]">
-      <div className="animate-pulse p-5">
-        <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-full bg-white/10" />
-          <div className="flex-1">
-            <div className="h-4 w-40 rounded bg-white/10" />
-            <div className="mt-2 h-3 w-28 rounded bg-white/10" />
-          </div>
-        </div>
-
-        <div className="mt-5 space-y-3">
-          <div className="h-4 w-full rounded bg-white/10" />
-          <div className="h-4 w-11/12 rounded bg-white/10" />
-          <div className="h-4 w-8/12 rounded bg-white/10" />
-        </div>
-
-        <div className="mt-5 h-72 rounded-3xl bg-white/10" />
-
-        <div className="mt-5 flex gap-3">
-          <div className="h-10 flex-1 rounded-2xl bg-white/10" />
-          <div className="h-10 flex-1 rounded-2xl bg-white/10" />
-          <div className="h-10 flex-1 rounded-2xl bg-white/10" />
-        </div>
-      </div>
+      ))}
     </div>
   )
 }

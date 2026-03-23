@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import CreatePost from "@/components/social/CreatePost";
 import Feed from "@/components/social/Feed";
+import { useRouter } from "next/navigation";
+import FriendRequestsPanel from '@/components/FriendRequestsPanel'
+import MessageNavButton from '@/components/MessageNavButton'
 
 type UserType = any;
 
@@ -48,55 +51,91 @@ const SUGGESTED = [
 
 export default function SocialPage() {
   const supabase = useMemo(() => createClient(), []);
+  const router = useRouter();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [user, setUser] = useState<UserType | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [loadingUser, setLoadingUser] = useState(true);
 
+  const avatarUrl =
+    user?.user_metadata?.avatar_url ||
+    user?.user_metadata?.picture ||
+    "/default-avatar.png";
+
   useEffect(() => {
     let mounted = true;
 
-    const loadUser = async () => {
-      setLoadingUser(true);
-      const { data, error } = await supabase.auth.getUser();
-      if (!mounted) return;
+    const syncProfile = async (sessionUser: any) => {
+      try {
+        if (!sessionUser?.id) return;
 
-      if (error) {
-        console.error("getUser error:", error);
-        setUser(null);
-        setUserId(null);
-        setLoadingUser(false);
-        return;
+        const displayName =
+          sessionUser.user_metadata?.full_name ||
+          sessionUser.user_metadata?.name ||
+          sessionUser.email ||
+          "NEXORA User";
+
+        const avatarUrlFromAuth =
+          sessionUser.user_metadata?.avatar_url ||
+          sessionUser.user_metadata?.picture ||
+          null;
+
+        const finalAvatar = avatarUrlFromAuth || "/default-avatar.png";
+
+        const { error } = await supabase.from("profiles").upsert({
+          id: sessionUser.id,
+          display_name: displayName,
+          avatar_url: finalAvatar,
+        });
+
+        if (error) {
+          console.log("syncProfile error", error);
+        }
+      } catch (e) {
+        console.log("syncProfile catch", e);
       }
+    };
 
-      setUser(data.user ?? null);
-      setUserId(data.user?.id ?? null);
-      setLoadingUser(false);
+    const loadUser = async () => {
+      try {
+        const { data, error } = await supabase.auth.getUser();
+
+        if (error) {
+          console.error("getUser error =", error);
+        }
+
+        const sessionUser = data?.user ?? null;
+
+        if (!mounted) return;
+
+        if (!sessionUser) {
+          setLoadingUser(false);
+          router.replace("/login");
+          return;
+        }
+
+        setUser(sessionUser);
+        setUserId(sessionUser.id);
+
+        await syncProfile(sessionUser);
+      } catch (e) {
+        console.error("loadUser error =", e);
+      } finally {
+        if (mounted) setLoadingUser(false);
+      }
     };
 
     loadUser();
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) return;
-      setUser(session?.user ?? null);
-      setUserId(session?.user?.id ?? null);
-      setLoadingUser(false);
-    });
-
     return () => {
       mounted = false;
-      subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, [router, supabase]);
 
   return (
     <>
       <style jsx global>{`
-        @import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+Thai:wght@400;500;600;700;800;900&display=swap");
-
         :root {
           --nx-bg: #06070a;
           --nx-panel: rgba(255, 255, 255, 0.04);
@@ -172,7 +211,7 @@ export default function SocialPage() {
           margin: 0 auto;
           padding: 18px;
           display: grid;
-          grid-template-columns: 220px minmax(0, 1fr) 330px;
+          grid-template-columns: 220px minmax(0, 1fr) 120px;
           gap: 22px;
           min-height: 100vh;
           position: relative;
@@ -193,15 +232,19 @@ export default function SocialPage() {
         }
 
         .nex-glass {
-          background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(7,9,15,0.96));
-          border: 1px solid rgba(255,255,255,0.05);
+          background: linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.045),
+            rgba(7, 9, 15, 0.96)
+          );
+          border: 1px solid rgba(255, 255, 255, 0.05);
           border-radius: var(--nx-radius-lg);
           box-shadow: var(--nx-shadow);
         }
 
         .nex-soft {
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.05);
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.05);
           border-radius: var(--nx-radius-lg);
         }
 
@@ -209,8 +252,12 @@ export default function SocialPage() {
         .nex-shell :global(.feed-card),
         .nex-shell :global(.post-card),
         .nex-shell :global(.comment-card) {
-          background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(7,9,15,0.96));
-          border: 1px solid rgba(255,255,255,0.05);
+          background: linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.045),
+            rgba(7, 9, 15, 0.96)
+          );
+          border: 1px solid rgba(255, 255, 255, 0.05);
           border-radius: 24px;
           box-shadow: var(--nx-shadow);
           color: var(--nx-text);
@@ -227,9 +274,9 @@ export default function SocialPage() {
         .nex-shell :global(.feed-card input[type="text"]),
         .nex-shell :global(.post-card textarea),
         .nex-shell :global(.post-card input[type="text"]) {
-          background: rgba(255,255,255,0.035) !important;
+          background: rgba(255, 255, 255, 0.035) !important;
           color: #fff !important;
-          border: 1px solid rgba(255,255,255,0.06) !important;
+          border: 1px solid rgba(255, 255, 255, 0.06) !important;
           border-radius: 16px !important;
         }
 
@@ -328,16 +375,13 @@ export default function SocialPage() {
               <SidebarItem label="Marketplace" icon="◈" />
               <SidebarItem label="Guilds" icon="⚔" />
               <SidebarItem label="Notifications" icon="🔔" badge="9" />
-              <SidebarItem label="Messages" icon="✉" badge="3" />
+              <MessageNavButton />
               <SidebarItem label="Profile" icon="◉" />
             </div>
 
             <div style={{ flex: 1 }} />
 
-            <div
-              className="nex-left-promo nex-glass"
-              style={{ padding: 18 }}
-            >
+            <div className="nex-left-promo nex-glass" style={{ padding: 18 }}>
               <div
                 style={{
                   fontFamily: '"Cinzel", "Noto Sans Thai", serif',
@@ -594,34 +638,67 @@ export default function SocialPage() {
           </main>
 
           <aside className="nex-right" style={{ display: "grid", alignContent: "start", gap: 16, minWidth: 0 }}>
-            <div className="nex-glass" style={{ padding: 18 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-                <AvatarCircle text={user?.email?.[0]?.toUpperCase?.() || "N"} small />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {user ? user.email || "Logged in" : "Guest"}
-                  </div>
-                  <div style={{ color: "#9f8a62", fontSize: 12 }}>{userId ? "เข้าสู่ระบบแล้ว" : "เข้าสู่ระบบเพื่อใช้งานเต็มระบบ"}</div>
-                </div>
-              </div>
-              <ActionButton label={userId ? "พร้อมใช้งาน" : "เข้าสู่ระบบ"} variant="glass" full />
-            </div>
+  <PanelCard title="Friend Requests" subtitle="คำขอเพื่อนของคุณ">
+    <FriendRequestsPanel userId={userId} />
+  </PanelCard>
 
-            <PanelCard title="Friends online" subtitle="ผู้เล่นที่พร้อมคุยหรือเข้าห้องได้เลย">
-              <div style={{ display: "grid", gap: 14 }}>
-                {FRIENDS_ONLINE.map((friend) => (
-                  <FriendRow key={friend.name} {...friend} />
-                ))}
-              </div>
-            </PanelCard>
-          </aside>
+  <div className="nex-glass" style={{ padding: 18 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+      <AvatarCircle
+        text={user?.email?.[0]?.toUpperCase?.() || "N"}
+        imageUrl={avatarUrl}
+        small
+      />
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            fontWeight: 800,
+            color: "#fff",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {user ? user.email || "Logged in" : "Guest"}
+        </div>
+        <div style={{ color: "#9f8a62", fontSize: 12 }}>
+          {userId ? "เข้าสู่ระบบแล้ว" : "เข้าสู่ระบบเพื่อใช้งานเต็มระบบ"}
+        </div>
+      </div>
+    </div>
+
+    <ActionButton label={userId ? "พร้อมใช้งาน" : "เข้าสู่ระบบ"} variant="glass" full />
+  </div>
+
+  <PanelCard title="Friends online" subtitle="ผู้เล่นที่พร้อมคุยหรือเข้าห้องได้เลย">
+    <div style={{ display: "grid", gap: 14 }}>
+      {FRIENDS_ONLINE.map((friend) => (
+        <FriendRow key={friend.name} {...friend} />
+      ))}
+    </div>
+  </PanelCard>
+</aside>
         </div>
       </div>
     </>
   );
 }
 
-function GlowOrb({ top, left, right, size, color, blur }: { top: number; left?: number; right?: number; size: number; color: string; blur: number }) {
+function GlowOrb({
+  top,
+  left,
+  right,
+  size,
+  color,
+  blur,
+}: {
+  top: number;
+  left?: number;
+  right?: number;
+  size: number;
+  color: string;
+  blur: number;
+}) {
   return (
     <div
       style={{
@@ -661,7 +738,17 @@ function LogoBox() {
   );
 }
 
-function SidebarItem({ label, icon, active, badge }: { label: string; icon: string; active?: boolean; badge?: string }) {
+function SidebarItem({
+  label,
+  icon,
+  active,
+  badge,
+}: {
+  label: string;
+  icon: string;
+  active?: boolean;
+  badge?: string;
+}) {
   return (
     <div
       style={{
@@ -791,14 +878,24 @@ function StoryCard({ title, subtitle, accent }: { title: string; subtitle: strin
   );
 }
 
-function AvatarCircle({ text, small }: { text: string; small?: boolean }) {
+function AvatarCircle({
+  text,
+  small,
+  imageUrl,
+}: {
+  text: string;
+  small?: boolean;
+  imageUrl?: string | null;
+}) {
   const size = small ? 44 : 56;
+
   return (
     <div
       style={{
         width: size,
         height: size,
         borderRadius: "50%",
+        overflow: "hidden",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -809,7 +906,22 @@ function AvatarCircle({ text, small }: { text: string; small?: boolean }) {
         flexShrink: 0,
       }}
     >
-      {text}
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt="avatar"
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+          }}
+        />
+      ) : (
+        text
+      )}
     </div>
   );
 }
@@ -909,10 +1021,15 @@ function SuggestedRow({ name, role }: { name: string; role: string }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
         <AvatarCircle text={name.charAt(0)} small />
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 800, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
-          <div style={{ color: "#b89e71", fontSize: 12, marginTop: 4 }}>{role}</div>
+          <div style={{ fontWeight: 800, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {name}
+          </div>
+          <div style={{ color: "#b89e71", fontSize: 12, marginTop: 4 }}>
+            {role}
+          </div>
         </div>
       </div>
+
       <ActionButton label="Follow" variant="glass" />
     </div>
   );
@@ -984,7 +1101,15 @@ function TabPill({ children, active }: { children: React.ReactNode; active?: boo
   );
 }
 
-function ActionButton({ label, variant, full }: { label: string; variant: "gold" | "orange" | "glass"; full?: boolean }) {
+function ActionButton({
+  label,
+  variant,
+  full,
+}: {
+  label: string;
+  variant: "gold" | "orange" | "glass";
+  full?: boolean;
+}) {
   const styleMap = {
     gold: {
       background: "linear-gradient(135deg, #fff0b4 0%, #e6bb57 35%, #c88d27 68%, #7c4dff 135%)",
