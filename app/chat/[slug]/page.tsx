@@ -6,7 +6,7 @@ import ChatBox from "../../../components/ChatBox";
 export default function ChatRoomPage() {
   const params = useParams();
   const slug = String(params.slug || "global");
-
+  <ChatBox roomSlug={slug} />;
   return (
     <div
       style={{
@@ -59,7 +59,7 @@ export default function ChatRoomPage() {
         </div>
 
         {/* 💬 แชทคนจริง */}
-        <ChatBox />
+        <ChatBox roomSlug={slug} />
       </div>
     </div>
   );

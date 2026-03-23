@@ -1,8 +1,9 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 
 type UserProfile = {
   name: string;
@@ -18,7 +19,7 @@ type PresenceRow = {
 
 const ROOMS = [
   { slug: "global", name: "Global Chat", desc: "ห้องคุยหลักของผู้เล่น" },
-  { slug: "market", name: "Marketplace", desc: "ห้องซื้อขายและดีล" },
+  { slug: "marketplace", name: "Marketplace", desc: "ห้องซื้อขายและดีล" },
   { slug: "guild", name: "Guild Room", desc: "ห้องกิลด์และทีม" },
   { slug: "tournament", name: "Tournament", desc: "ห้องแข่งขันและกิจกรรม" },
 ];
@@ -31,7 +32,19 @@ const FRIENDS = [
   ["SerialHunter", "Join", "Global Chat"],
 ];
 
+const SIDEBAR_MENU = [
+  { icon: "⌂", label: "Home", href: "/" },
+  { icon: "◫", label: "Category", href: "/category" },
+  { icon: "☰", label: "Library", href: "/library" },
+  { icon: "#", label: "Community", href: "/community", badge: "2" },
+  { icon: "◉", label: "Friends", href: "/friends" },
+  { icon: "♡", label: "Wishlist", href: "/wishlist" },
+  { icon: "↓", label: "Downloads", href: "/downloads" },
+];
+
 export default function Home() {
+  const pathname = usePathname();
+  const supabase = createClient();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -41,17 +54,16 @@ export default function Home() {
     let mounted = true;
 
     const loadUser = async () => {
-      const { data, error } = await supabase.auth.getUser();
+      const { data } = await supabase.auth.getSession()
+      const user = data.session?.user
 
       if (!mounted) return;
 
-      if (error || !data.user) {
-        setUserProfile(null);
+      if (!user) {
+        setUserProfile(null)
         setLoading(false);
         return;
       }
-
-      const user = data.user;
 
       setUserProfile({
         name:
@@ -333,15 +345,18 @@ export default function Home() {
               </div>
             </div>
 
-            <div style={{ display: "grid", gap: 6 }}>
-              <SidebarItem icon="⌂" label="Home" active />
-              <SidebarItem icon="◫" label="Category" />
-              <SidebarItem icon="☰" label="Library" />
-              <SidebarItem icon="#" label="Community" badge="2" />
-              <SidebarItem icon="◉" label="Friends" />
-              <SidebarItem icon="♡" label="Wishlist" />
-              <SidebarItem icon="↓" label="Downloads" />
-            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+  {SIDEBAR_MENU.map((item) => (
+    <SidebarItem
+      key={item.label}
+      icon={item.icon}
+      label={item.label}
+      href={item.href}
+      badge={item.badge}
+      active={pathname === item.href}
+    />
+  ))}
+</div>
 
             <div style={{ flex: 1 }} />
 
@@ -619,7 +634,7 @@ export default function Home() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1.08fr 0.92fr",
+                gridTemplateColumns: "1.3fr 0.4fr",
                 gap: 20,
                 alignItems: "start",
               }}
@@ -664,7 +679,7 @@ export default function Home() {
                     src="https://script.google.com/macros/s/AKfycbzkYYwBvBryWEWCIMQpYanfeiRbta6geYhq2SlluadVGGiw3C2XsEPW-pT59PqcIF6C/exec"
                     style={{
                       width: "100%",
-                      height: 620,
+                      height: 900,
                       border: 0,
                       display: "block",
                       borderRadius: 22,
@@ -704,7 +719,13 @@ export default function Home() {
                   ห้องแชทผู้เล่น
                 </div>
 
-                <div style={{ display: "grid", gap: 14 }}>
+                <div
+  style={{
+    display: "grid",
+    gap: 14,
+    maxWidth: 300,   // 👈 ลดความกว้างตรงนี้
+  }}
+>
                   {ROOMS.map((room) => {
                     const count = counts[room.slug] || 0;
                     return (
@@ -1022,34 +1043,107 @@ export default function Home() {
 function SidebarItem({
   icon,
   label,
+  href,
   active,
   badge,
 }: {
   icon: string;
   label: string;
+  href: string;
   active?: boolean;
   badge?: string;
 }) {
   return (
     <Link
-      href="#"
+      href={href}
       style={{
-        minHeight: 48,
-        padding: "0 12px",
-        borderRadius: 14,
+        position: "relative",
+        minHeight: 54,
+        padding: "0 14px",
+        borderRadius: 16,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        color: active ? "#ff6f86" : "#e3dbcd",
+        gap: 12,
+        overflow: "hidden",
+        border: active
+          ? "1px solid rgba(255,120,82,0.10)"
+          : "1px solid transparent",
         background: active
-          ? "linear-gradient(90deg, rgba(255,92,112,0.08), rgba(255,255,255,0.01))"
+          ? "linear-gradient(90deg, rgba(255,92,112,0.14), rgba(255,132,82,0.05), rgba(255,255,255,0.01))"
           : "transparent",
+        color: active ? "#ff7d8f" : "#f0e4d0",
+        transition: "all 0.22s ease",
+        boxShadow: active
+          ? "inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 24px rgba(255,92,112,0.06)"
+          : "none",
+      }}
+      onMouseEnter={(e) => {
+        if (active) return;
+        e.currentTarget.style.background =
+          "linear-gradient(90deg, rgba(255,255,255,0.045), rgba(255,255,255,0.01))";
+        e.currentTarget.style.border =
+          "1px solid rgba(255,255,255,0.04)";
+        e.currentTarget.style.transform = "translateX(2px)";
+      }}
+      onMouseLeave={(e) => {
+        if (active) return;
+        e.currentTarget.style.background = "transparent";
+        e.currentTarget.style.border = "1px solid transparent";
+        e.currentTarget.style.transform = "translateX(0)";
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ width: 20, textAlign: "center", fontSize: 15 }}>{icon}</div>
-        <div style={{ fontWeight: 700 }}>{label}</div>
+      {active && (
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 10,
+            bottom: 10,
+            width: 3,
+            borderRadius: 999,
+            background:
+              "linear-gradient(180deg, #ff7c7c 0%, #ffae66 100%)",
+            boxShadow: "0 0 14px rgba(255,140,100,0.34)",
+          }}
+        />
+      )}
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          minWidth: 0,
+        }}
+      >
+        <div
+          style={{
+            width: 22,
+            textAlign: "center",
+            fontSize: 15,
+            fontWeight: 800,
+            color: active ? "#ffb199" : "#f2dbc1",
+            flexShrink: 0,
+          }}
+        >
+          {icon}
+        </div>
+
+        <div
+          style={{
+            fontWeight: active ? 800 : 700,
+            fontSize: 15,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            letterSpacing: active ? "0.01em" : "0",
+          }}
+        >
+          {label}
+        </div>
       </div>
+
       {badge ? (
         <div
           style={{
@@ -1058,18 +1152,32 @@ function SidebarItem({
             padding: "0 8px",
             borderRadius: 999,
             background:
-              "linear-gradient(135deg, rgba(255,84,120,0.95), rgba(255,125,75,0.95))",
+              "linear-gradient(135deg, rgba(255,84,120,0.98), rgba(255,125,75,0.98))",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             color: "#fff",
-            fontWeight: 800,
+            fontWeight: 900,
             fontSize: 12,
+            boxShadow: "0 10px 18px rgba(255,95,110,0.20)",
+            flexShrink: 0,
           }}
         >
           {badge}
         </div>
-      ) : null}
+      ) : (
+        <div
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: 999,
+            background: active
+              ? "rgba(255,168,120,0.18)"
+              : "transparent",
+            flexShrink: 0,
+          }}
+        />
+      )}
     </Link>
   );
 }

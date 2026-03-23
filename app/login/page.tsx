@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { createClient } from '@/lib/supabase/client'
+
+const supabase = createClient()
 
 export default function LoginPage() {
   const [name, setName] = useState("");
@@ -12,10 +14,7 @@ export default function LoginPage() {
     const checkCurrentUser = async () => {
       const { data } = await supabase.auth.getUser();
 
-      if (data.user) {
-        window.location.href = "/";
-        return;
-      }
+      
 
       setCheckingSession(false);
     };
@@ -40,7 +39,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: window.location.origin + '/auth/callback',
         },
       });
 

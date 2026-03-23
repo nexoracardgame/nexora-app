@@ -55,12 +55,19 @@ const EMOJIS = [
   "🥳",
 ];
 
-export default function ChatBox() {
+export default function ChatBox({ roomSlug = "global" }: { roomSlug?: string }) {
   const [channels, setChannels] = useState<Channel[]>([]);
-  const [channelSlug, setChannelSlug] = useState("global");
+  const [channelSlug, setChannelSlug] = useState(roomSlug);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<PresenceUser[]>([]);
   const [user, setUser] = useState<any>(null);
+  useEffect(() => {
+  const getUser = async () => {
+    const { data } = await supabase.auth.getUser()
+    setUser(data.user) // 🔥 เพิ่มบรรทัดนี้
+  }
+  getUser()
+}, [])
   const [text, setText] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
   const [sending, setSending] = useState(false);
@@ -75,6 +82,10 @@ export default function ChatBox() {
     () => channels.find((c) => c.slug === channelSlug) || null,
     [channels, channelSlug]
   );
+
+  useEffect(() => {
+  setChannelSlug(roomSlug);
+}, [roomSlug]);
 
   useEffect(() => {
     let mounted = true;
@@ -152,10 +163,11 @@ export default function ChatBox() {
         return next;
       });
 
-      queueMicrotask(scrollToBottom);
+      queueMicrotask(() => scrollToBottom());
     };
 
     refreshMessages();
+    setTimeout(() => scrollToBottom(true), 100);
     loadOnlineUsers();
 
     const realtimeChannel = supabase
@@ -213,10 +225,6 @@ export default function ChatBox() {
     };
   }, [channelSlug, activeChannel?.id]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
   async function loadChannels() {
     const { data } = await supabase
       .from("chat_channels")
@@ -269,14 +277,20 @@ export default function ChatBox() {
     });
   }
 
-  function scrollToBottom() {
-    const el = scrollerRef.current;
-    if (!el) return;
-    el.scrollTo({
-      top: el.scrollHeight,
-      behavior: "smooth",
-    });
-  }
+  function scrollToBottom(force = false) {
+  const el = scrollerRef.current;
+  if (!el) return;
+
+  const nearBottom =
+    el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+
+  if (!force && !nearBottom) return;
+
+  el.scrollTo({
+    top: el.scrollHeight,
+    behavior: "smooth",
+  });
+}
 
   function appendEmoji(emoji: string) {
     setText((prev) => prev + emoji);
@@ -320,7 +334,7 @@ export default function ChatBox() {
           .order("created_at", { ascending: true });
 
         setMessages((data || []) as ChatMessage[]);
-        queueMicrotask(scrollToBottom);
+        queueMicrotask(() => scrollToBottom(true));
       }
     } finally {
       setSending(false);
@@ -384,7 +398,7 @@ export default function ChatBox() {
           .order("created_at", { ascending: true });
 
         setMessages((data || []) as ChatMessage[]);
-        queueMicrotask(scrollToBottom);
+        queueMicrotask(() => scrollToBottom());
       }
     } finally {
       setUploading(false);
